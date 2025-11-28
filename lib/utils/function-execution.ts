@@ -39,6 +39,33 @@ export async function executeFunctionCall(
     return data.result
 }
 
+async function uploadImageToSupabase(
+    imageData: string,
+    mimeType: string
+): Promise<string | null> {
+    try {
+        const response = await fetch('/api/chat/upload-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                imageData,
+                mimeType
+            })
+        })
+
+        const data = await response.json()
+        if (data.success && data.url) {
+            return data.url
+        }
+        return null
+    } catch (error) {
+        console.error('이미지 업로드 실패:', error)
+        return null
+    }
+}
+
 export async function executeFunctionCalls(
     enabledServers: string[],
     functionCalls: FunctionCall[]
@@ -56,7 +83,30 @@ export async function executeFunctionCalls(
                     enabledServers[0],
                     call
                 )
-                results[callId] = result
+
+                // 이미지가 있으면 Supabase에 업로드
+                const processedContent = await Promise.all(
+                    result.content.map(async item => {
+                        if (item.type === 'image' && item.data && !item.url) {
+                            const imageUrl = await uploadImageToSupabase(
+                                item.data,
+                                item.mimeType || 'image/png'
+                            )
+                            if (imageUrl) {
+                                return {
+                                    ...item,
+                                    url: imageUrl
+                                }
+                            }
+                        }
+                        return item
+                    })
+                )
+
+                results[callId] = {
+                    ...result,
+                    content: processedContent
+                }
             } catch (error) {
                 results[callId] = {
                     content: [

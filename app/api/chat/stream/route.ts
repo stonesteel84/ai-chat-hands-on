@@ -107,6 +107,13 @@ export async function GET(req: Request) {
                             ', '
                         )}]`
                     )
+                    controller.enqueue(
+                        sseEncode({
+                            type: 'error',
+                            code: 'MCP_SERVER_NOT_CONNECTED',
+                            message: `다음 MCP 서버가 연결되지 않았습니다: ${invalidServers.join(', ')}. MCP 서버 관리에서 연결을 확인해주세요.`
+                        })
+                    )
                 }
 
                 // 활성화된 MCP 서버 정보 전송

@@ -20,6 +20,20 @@ export async function connectToMCPServer(
     config: MCPServerConfig
 ): Promise<ConnectedMCPServer> {
     try {
+        console.log(`🔌 MCP 서버 연결 시작: ${config.name} (${config.id})`)
+        console.log(`📋 연결 설정:`, {
+            transport: config.transport,
+            command: config.command,
+            url: config.url,
+            argsCount: config.args?.length || 0,
+            envKeys: config.env ? Object.keys(config.env) : []
+        })
+
+        // 설정 검증
+        if (!config.transport) {
+            throw new Error('전송 방식(transport)이 지정되지 않았습니다')
+        }
+
         // 이미 연결된 클라이언트가 있다면 해제
         await disconnectFromMCPServer(config.id)
 
@@ -47,6 +61,11 @@ export async function connectToMCPServer(
                 if (!config.command) {
                     throw new Error('STDIO 전송 방식에는 command가 필요합니다')
                 }
+                console.log(`📦 STDIO 전송 설정:`, {
+                    command: config.command,
+                    args: config.args || [],
+                    envKeys: config.env ? Object.keys(config.env) : []
+                })
                 transport = new StdioClientTransport({
                     command: config.command,
                     args: config.args || [],
@@ -58,12 +77,24 @@ export async function connectToMCPServer(
                 if (!config.url) {
                     throw new Error('SSE 전송 방식에는 URL이 필요합니다')
                 }
+                console.log(`📡 SSE 전송 설정: ${config.url}`)
+                try {
+                    new URL(config.url) // URL 유효성 검사
+                } catch {
+                    throw new Error(`유효하지 않은 URL: ${config.url}`)
+                }
                 transport = new SSEClientTransport(new URL(config.url))
                 break
 
             case 'http':
                 if (!config.url) {
                     throw new Error('HTTP 전송 방식에는 URL이 필요합니다')
+                }
+                console.log(`🌐 HTTP 전송 설정: ${config.url}`)
+                try {
+                    new URL(config.url) // URL 유효성 검사
+                } catch {
+                    throw new Error(`유효하지 않은 URL: ${config.url}`)
                 }
 
                 const baseUrl = new URL(config.url)
@@ -74,35 +105,96 @@ export async function connectToMCPServer(
                 break
 
             default:
-                throw new Error(`지원되지 않는 전송 방식: ${config.transport}`)
+                throw new Error(
+                    `지원되지 않는 전송 방식: ${config.transport}. 지원되는 방식: stdio, sse, http`
+                )
         }
 
         try {
-            await client.connect(transport)
+            // 연결 타임아웃 설정 (30초)
+            const connectPromise = client.connect(transport)
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(
+                    () =>
+                        reject(
+                            new Error(
+                                '서버 연결 타임아웃: 30초 내에 응답이 없습니다. 서버가 실행 중인지 확인해주세요.'
+                            )
+                        ),
+                    30000
+                )
+            })
+
+            await Promise.race([connectPromise, timeoutPromise])
             console.log(`✅ MCP 서버 연결 성공: ${config.name} (${config.id})`)
         } catch (error) {
+            // 기존 transport 정리
+            try {
+                await transport.close()
+            } catch {
+                // 정리 중 오류는 무시
+            }
+
+            // 에러 메시지 개선
+            let errorMessage = '알 수 없는 오류가 발생했습니다'
+            if (error instanceof Error) {
+                errorMessage = error.message
+                // SSE/HTTP 특정 오류 처리
+                if (
+                    errorMessage.includes('504') ||
+                    errorMessage.includes('Gateway Timeout')
+                ) {
+                    errorMessage = `서버 연결 타임아웃 (504): ${config.url} 서버가 응답하지 않습니다. 서버가 실행 중인지, URL이 올바른지 확인해주세요.`
+                } else if (
+                    errorMessage.includes('ECONNREFUSED') ||
+                    errorMessage.includes('connection refused')
+                ) {
+                    errorMessage = `연결 거부됨: ${config.url} 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.`
+                } else if (
+                    errorMessage.includes('ENOTFOUND') ||
+                    errorMessage.includes('getaddrinfo')
+                ) {
+                    errorMessage = `호스트를 찾을 수 없음: ${config.url} URL이 올바른지 확인해주세요.`
+                } else if (errorMessage.includes('SSE error')) {
+                    errorMessage = `SSE 연결 오류: ${errorMessage}. 서버가 SSE를 지원하는지 확인해주세요.`
+                }
+            }
+
             // HTTP 연결 실패 시 SSE로 폴백 시도
             if (config.transport === 'http' && config.url) {
                 console.log(
-                    'StreamableHTTP 연결 실패, SSE 전송 방식으로 폴백 중...',
-                    error
+                    'StreamableHTTP 연결 실패, SSE 전송 방식으로 폴백 시도 중...',
+                    errorMessage
                 )
 
-                // 기존 transport 정리
                 try {
-                    await transport.close()
-                } catch {
-                    // 정리 중 오류는 무시
-                }
+                    // SSE transport로 재시도
+                    transport = new SSEClientTransport(new URL(config.url))
+                    const connectPromise = client.connect(transport)
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(
+                            () =>
+                                reject(
+                                    new Error(
+                                        'SSE 폴백 연결 타임아웃: 30초 내에 응답이 없습니다.'
+                                    )
+                                ),
+                            30000
+                        )
+                    })
 
-                // SSE transport로 재시도
-                transport = new SSEClientTransport(new URL(config.url))
-                await client.connect(transport)
-                console.log(
-                    `✅ MCP 서버 SSE 폴백 연결 성공: ${config.name} (${config.id})`
-                )
+                    await Promise.race([connectPromise, timeoutPromise])
+                    console.log(
+                        `✅ MCP 서버 SSE 폴백 연결 성공: ${config.name} (${config.id})`
+                    )
+                } catch (fallbackError) {
+                    console.error('SSE 폴백 연결도 실패:', fallbackError)
+                    throw new Error(
+                        `HTTP 및 SSE 연결 모두 실패: ${errorMessage}`
+                    )
+                }
             } else {
-                throw error
+                throw new Error(errorMessage)
             }
         }
 

@@ -112,8 +112,17 @@ export function MCPManager() {
     }
 
     const handleConnectServer = async (server: MCPServerConfig) => {
+        setIsLoading(true)
         try {
             console.log(`${server.name} 서버에 연결을 시도합니다...`)
+            console.log('서버 설정:', {
+                id: server.id,
+                name: server.name,
+                transport: server.transport,
+                command: server.command,
+                url: server.url
+            })
+
             const connectedServer = await mcpClientManager.connectServer(server)
 
             const updatedServers = connectedServers.filter(
@@ -127,26 +136,50 @@ export function MCPManager() {
             )
             setServers(MCPServerStorage.getAllServers())
 
+            // 연결 상태 새로고침
+            refreshConnections()
+
             if (connectedServer.isConnected) {
                 toast({
                     title: '서버 연결 성공',
                     description: `${server.name} 서버에 연결되었습니다. Tools: ${connectedServer.tools.length}, Prompts: ${connectedServer.prompts.length}, Resources: ${connectedServer.resources.length}`
                 })
             } else {
-                throw new Error(
-                    connectedServer.lastError || '연결에 실패했습니다'
-                )
+                const errorMsg =
+                    connectedServer.lastError ||
+                    '서버 연결에 실패했습니다. 설정을 확인해주세요.'
+                console.error('연결 실패 상세:', {
+                    server: server.name,
+                    error: errorMsg,
+                    config: server,
+                    transport: server.transport,
+                    url: server.url,
+                    command: server.command
+                })
+                
+                // 504 오류에 대한 특별 안내
+                if (errorMsg.includes('504') || errorMsg.includes('타임아웃')) {
+                    throw new Error(
+                        `${errorMsg}\n\n해결 방법:\n1. 서버가 실행 중인지 확인\n2. URL이 올바른지 확인\n3. 방화벽 설정 확인\n4. 네트워크 연결 확인`
+                    )
+                }
+                
+                throw new Error(errorMsg)
             }
         } catch (error) {
             console.error('MCP 서버 연결 오류:', error)
+            const errorMessage =
+                error instanceof Error
+                    ? error.message
+                    : '알 수 없는 오류가 발생했습니다.'
+            
             toast({
                 title: '서버 연결 실패',
-                description:
-                    error instanceof Error
-                        ? error.message
-                        : '알 수 없는 오류가 발생했습니다.',
+                description: errorMessage,
                 variant: 'destructive'
             })
+        } finally {
+            setIsLoading(false)
         }
     }
 

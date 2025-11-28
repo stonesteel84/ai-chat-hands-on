@@ -17,6 +17,7 @@ interface FunctionResult {
         text?: string
         data?: string
         mimeType?: string
+        url?: string
     }>
     isError?: boolean
 }
@@ -112,19 +113,22 @@ export function FunctionCallResult({
                                                         </pre>
                                                     )}
                                                     {item.type === 'image' &&
-                                                        item.data && (
+                                                        (item.url || item.data) && (
                                                             <div className="space-y-2">
                                                                 <div className="text-xs text-gray-600 dark:text-gray-400">
                                                                     생성된
                                                                     이미지:
                                                                 </div>
                                                                 <Image
-                                                                    src={`data:${
-                                                                        item.mimeType ||
-                                                                        'image/png'
-                                                                    };base64,${
-                                                                        item.data
-                                                                    }`}
+                                                                    src={
+                                                                        item.url ||
+                                                                        `data:${
+                                                                            item.mimeType ||
+                                                                            'image/png'
+                                                                        };base64,${
+                                                                            item.data
+                                                                        }`
+                                                                    }
                                                                     alt="Generated image"
                                                                     width={400}
                                                                     height={400}

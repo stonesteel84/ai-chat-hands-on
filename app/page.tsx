@@ -32,16 +32,76 @@ type ChatMessage = {
                 text?: string
                 data?: string
                 mimeType?: string
+                url?: string
             }>
             isError?: boolean
         }
     >
+    imageUrl?: string
 }
 
 const STORAGE_KEY = 'chat:session:v1'
+const SESSION_ID_KEY = 'chat:session:id'
+
+async function saveMessageToSupabase(
+    sessionId: string,
+    message: ChatMessage
+) {
+    try {
+        // 이미지 URL 추출 (함수 결과에서)
+        let imageUrl: string | undefined
+        if (message.functionResults) {
+            for (const result of Object.values(message.functionResults)) {
+                const imageItem = result.content?.find(
+                    item => item.type === 'image' && item.url
+                )
+                if (imageItem?.url) {
+                    imageUrl = imageItem.url
+                    break
+                }
+            }
+        }
+
+        await fetch('/api/chat/save-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sessionId,
+                role: message.role,
+                content: message.content,
+                imageUrl,
+                functionCalls: message.functionCalls || null,
+                functionResults: message.functionResults || null
+            })
+        })
+    } catch (error) {
+        console.error('Supabase 메시지 저장 실패:', error)
+    }
+}
+
+async function loadMessagesFromSupabase(
+    sessionId: string
+): Promise<ChatMessage[]> {
+    try {
+        const response = await fetch(
+            `/api/chat/load-messages?sessionId=${encodeURIComponent(sessionId)}`
+        )
+        const data = await response.json()
+        if (data.success && data.messages) {
+            return data.messages
+        }
+        return []
+    } catch (error) {
+        console.error('Supabase 메시지 로드 실패:', error)
+        return []
+    }
+}
 
 export default function Home() {
     const [currentTab, setCurrentTab] = useState<'chat' | 'mcp'>('chat')
+    const [sessionId, setSessionId] = useState<string>('')
     const markdownComponents: Components = {
         code({ className, children, ...props }) {
             const codeText = String(children).replace(/\n$/, '')
@@ -110,20 +170,57 @@ export default function Home() {
 
     // Load persisted messages only on client after mount to avoid SSR mismatch
     useEffect(() => {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY)
-            if (raw) setMessages(JSON.parse(raw) as ChatMessage[])
-        } catch {}
-        hasLoadedRef.current = true
+        const loadMessages = async () => {
+            try {
+                // 세션 ID 가져오기 또는 생성
+                let currentSessionId = localStorage.getItem(SESSION_ID_KEY)
+                if (!currentSessionId) {
+                    currentSessionId = `session-${Date.now()}-${Math.random()
+                        .toString(36)
+                        .substring(7)}`
+                    localStorage.setItem(SESSION_ID_KEY, currentSessionId)
+                }
+                setSessionId(currentSessionId)
+
+                // Supabase에서 메시지 로드 시도
+                const supabaseMessages = await loadMessagesFromSupabase(
+                    currentSessionId
+                )
+                if (supabaseMessages.length > 0) {
+                    setMessages(supabaseMessages)
+                } else {
+                    // Supabase에 없으면 localStorage에서 로드
+                    const raw = localStorage.getItem(STORAGE_KEY)
+                    if (raw) {
+                        const localMessages = JSON.parse(raw) as ChatMessage[]
+                        setMessages(localMessages)
+                        // localStorage 메시지를 Supabase에 동기화
+                        for (const msg of localMessages) {
+                            await saveMessageToSupabase(currentSessionId, msg)
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('메시지 로드 오류:', error)
+                // 오류 시 localStorage에서만 로드
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY)
+                    if (raw) setMessages(JSON.parse(raw) as ChatMessage[])
+                } catch {}
+            }
+            hasLoadedRef.current = true
+        }
+        loadMessages()
     }, [])
 
     // Persist messages after initial load is done
     useEffect(() => {
-        if (!hasLoadedRef.current) return
+        if (!hasLoadedRef.current || !sessionId) return
         try {
+            // localStorage에 저장
             localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
         } catch {}
-    }, [messages])
+    }, [messages, sessionId])
 
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -157,6 +254,11 @@ export default function Home() {
         const userMsg: ChatMessage = { role: 'user', content: prompt }
         const aiMsg: ChatMessage = { role: 'assistant', content: '' }
         setMessages(prev => [...prev, userMsg, aiMsg])
+        
+        // 사용자 메시지도 Supabase에 저장
+        if (sessionId) {
+            saveMessageToSupabase(sessionId, userMsg).catch(console.error)
+        }
 
         try {
             const mcpParams =
@@ -228,10 +330,20 @@ export default function Home() {
                                             const next = [...prev]
                                             const lastMsg =
                                                 next[next.length - 1]
-                                            next[next.length - 1] = {
+                                            const updatedMsg = {
                                                 ...lastMsg,
                                                 functionResults: results
                                             }
+                                            next[next.length - 1] = updatedMsg
+                                            
+                                            // Supabase에 업데이트된 메시지 저장
+                                            if (sessionId) {
+                                                saveMessageToSupabase(
+                                                    sessionId,
+                                                    updatedMsg
+                                                ).catch(console.error)
+                                            }
+                                            
                                             return next
                                         })
                                     })
@@ -248,7 +360,25 @@ export default function Home() {
                                 evt.enabledServers
                             )
                         } else if (evt.type === 'error') {
-                            throw new Error(evt.message || '오류')
+                            const errorCode = evt.code || 'UNKNOWN_ERROR'
+                            const errorMessage = evt.message || '오류가 발생했습니다'
+                            
+                            // MCP 서버 연결 오류인 경우 특별 처리
+                            if (errorCode === 'MCP_SERVER_NOT_CONNECTED') {
+                                setMessages(prev => {
+                                    const next = [...prev]
+                                    const last = next[next.length - 1]
+                                    next[next.length - 1] = {
+                                        role: 'assistant',
+                                        content:
+                                            (last?.content || '') +
+                                            `\n\n⚠️ **MCP 서버 연결 오류**\n\n${errorMessage}\n\nMCP 서버 관리 탭에서 서버 연결 상태를 확인하고 다시 연결해주세요.`
+                                    }
+                                    return next
+                                })
+                            } else {
+                                throw new Error(errorMessage)
+                            }
                         }
                     } catch {}
                 }

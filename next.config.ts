@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+    // 도커 배포를 위한 standalone 출력
+    output: 'standalone',
     experimental: {
         serverComponentsExternalPackages: ['@modelcontextprotocol/sdk']
     },
