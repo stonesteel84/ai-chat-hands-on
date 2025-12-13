@@ -156,14 +156,32 @@ export function MCPManager() {
                     url: server.url,
                     command: server.command
                 })
-                
+
                 // 504 오류에 대한 특별 안내
                 if (errorMsg.includes('504') || errorMsg.includes('타임아웃')) {
                     throw new Error(
                         `${errorMsg}\n\n해결 방법:\n1. 서버가 실행 중인지 확인\n2. URL이 올바른지 확인\n3. 방화벽 설정 확인\n4. 네트워크 연결 확인`
                     )
                 }
-                
+
+                // invalid_token 에러 발생 시 Smithery 대시보드 확인 및 따옴표 주의 안내 메시지 표시
+                if (errorMsg.includes('invalid_token')) {
+                    throw new Error(
+                        `인증 실패: 토큰이 유효하지 않습니다.\n\n${errorMsg}\n\n해결 방법:\n1. Smithery 대시보드에서 API 토큰이 만료되지 않았는지 확인하세요.\n2. 토큰을 다시 복사하여 'HTTP 헤더'에 입력해주세요.\n3. 입력 예시:\nAuthorization=Bearer eyJhbG...`
+                    )
+                }
+
+                // 인증 오류에 대한 특별 안내
+                if (
+                    errorMsg.includes('Authorization header') ||
+                    errorMsg.includes('401') ||
+                    errorMsg.includes('403')
+                ) {
+                    throw new Error(
+                        `인증 오류: ${errorMsg}\n\n해결 방법:\n1. MCP 서버 목록에서 해당 서버의 '수정' 버튼을 클릭하세요.\n2. 'HTTP 헤더' 필드에 다음 형식으로 토큰을 추가하세요:\nAuthorization=Bearer <YOUR_TOKEN>`
+                    )
+                }
+
                 throw new Error(errorMsg)
             }
         } catch (error) {
@@ -172,7 +190,7 @@ export function MCPManager() {
                 error instanceof Error
                     ? error.message
                     : '알 수 없는 오류가 발생했습니다.'
-            
+
             toast({
                 title: '서버 연결 실패',
                 description: errorMessage,
@@ -256,9 +274,8 @@ export function MCPManager() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = `mcp-servers-${
-                new Date().toISOString().split('T')[0]
-            }.json`
+            a.download = `mcp-servers-${new Date().toISOString().split('T')[0]
+                }.json`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)

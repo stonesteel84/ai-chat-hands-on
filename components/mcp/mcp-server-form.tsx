@@ -66,17 +66,17 @@ export function MCPServerForm({
             env:
                 formData.transport === 'stdio' && formData.env
                     ? Object.fromEntries(
-                          formData.env
-                              .split('\n')
-                              .filter(line => line.includes('='))
-                              .map(line => {
-                                  const [key, ...valueParts] = line.split('=')
-                                  return [
-                                      key.trim(),
-                                      valueParts.join('=').trim()
-                                  ]
-                              })
-                      )
+                        formData.env
+                            .split('\n')
+                            .filter(line => line.includes('='))
+                            .map(line => {
+                                const [key, ...valueParts] = line.split('=')
+                                return [
+                                    key.trim(),
+                                    valueParts.join('=').trim()
+                                ]
+                            })
+                    )
                     : {},
             url:
                 formData.transport === 'http' || formData.transport === 'sse'
@@ -85,19 +85,39 @@ export function MCPServerForm({
             headers:
                 (formData.transport === 'http' ||
                     formData.transport === 'sse') &&
-                formData.headers
+                    formData.headers
                     ? Object.fromEntries(
-                          formData.headers
-                              .split('\n')
-                              .filter(line => line.includes('='))
-                              .map(line => {
-                                  const [key, ...valueParts] = line.split('=')
-                                  return [
-                                      key.trim(),
-                                      valueParts.join('=').trim()
-                                  ]
-                              })
-                      )
+                        formData.headers
+                            .split('\n')
+                            .filter(line => line.includes('='))
+                            .map(line => {
+                                const [key, ...valueParts] = line.split('=')
+                                let value = valueParts.join('=').trim()
+
+                                // 1. 전체 따옴표 제거
+                                if (
+                                    (value.startsWith('"') &&
+                                        value.endsWith('"')) ||
+                                    (value.startsWith("'") &&
+                                        value.endsWith("'"))
+                                ) {
+                                    value = value.slice(1, -1)
+                                }
+
+                                // 2. Bearer 토큰 따옴표 제거
+                                if (value.match(/^Bearer\s+["'].+["']$/i)) {
+                                    value = value.replace(
+                                        /^Bearer\s+["'](.+)["']$/i,
+                                        'Bearer $1'
+                                    )
+                                }
+
+                                return [
+                                    key.trim(),
+                                    value
+                                ]
+                            })
+                    )
                     : {},
             createdAt: initialConfig.createdAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -220,45 +240,45 @@ export function MCPServerForm({
 
                     {(formData.transport === 'http' ||
                         formData.transport === 'sse') && (
-                        <>
-                            <div className="space-y-2">
-                                <Label htmlFor="url">서버 URL *</Label>
-                                <Input
-                                    id="url"
-                                    value={formData.url}
-                                    onChange={e =>
-                                        updateFormData('url', e.target.value)
-                                    }
-                                    placeholder="예: http://localhost:3001 또는 https://api.example.com"
-                                    required
-                                />
-                            </div>
+                            <>
+                                <div className="space-y-2">
+                                    <Label htmlFor="url">서버 URL *</Label>
+                                    <Input
+                                        id="url"
+                                        value={formData.url}
+                                        onChange={e =>
+                                            updateFormData('url', e.target.value)
+                                        }
+                                        placeholder="예: http://localhost:3001 또는 https://api.example.com"
+                                        required
+                                    />
+                                </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="headers">HTTP 헤더</Label>
-                                <Textarea
-                                    id="headers"
-                                    value={formData.headers}
-                                    onChange={e =>
-                                        updateFormData(
-                                            'headers',
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Authorization=Bearer token&#10;Content-Type=application/json"
-                                    className="min-h-[80px]"
-                                />
-                            </div>
-                        </>
-                    )}
+                                <div className="space-y-2">
+                                    <Label htmlFor="headers">HTTP 헤더</Label>
+                                    <Textarea
+                                        id="headers"
+                                        value={formData.headers}
+                                        onChange={e =>
+                                            updateFormData(
+                                                'headers',
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Authorization=Bearer token&#10;Content-Type=application/json"
+                                        className="min-h-[80px]"
+                                    />
+                                </div>
+                            </>
+                        )}
 
                     <div className="flex gap-2 pt-4">
                         <Button type="submit" disabled={isLoading}>
                             {isLoading
                                 ? '저장 중...'
                                 : initialConfig.id
-                                ? '수정'
-                                : '추가'}
+                                    ? '수정'
+                                    : '추가'}
                         </Button>
                         <Button
                             type="button"

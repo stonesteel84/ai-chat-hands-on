@@ -17,8 +17,9 @@ export async function GET(req: Request) {
     const prompt = url.searchParams.get('q')?.trim()
     const enabledMCPServers =
         url.searchParams.get('mcpServers')?.split(',').filter(Boolean) || []
-    const model = process.env.LLM_MODEL || 'gemini-2.0-flash-001'
+    const model = process.env.LLM_MODEL || 'gemini-2.5-flash'
     const apiKey = process.env.GEMINI_API_KEY
+    console.log('🔑 API Key Loaded:', apiKey ? 'Yes' : 'No', apiKey?.substring(0, 5))
 
     const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -119,8 +120,7 @@ export async function GET(req: Request) {
                 // 활성화된 MCP 서버 정보 전송
                 if (enabledClients.length > 0) {
                     console.log(
-                        `🚀 AI에 연결된 MCP 도구: ${
-                            tools.length
+                        `🚀 AI에 연결된 MCP 도구: ${tools.length
                         }개 (서버: [${enabledClients.join(', ')}])`
                     )
                     controller.enqueue(
@@ -133,11 +133,18 @@ export async function GET(req: Request) {
                     console.log(`ℹ️ 활성화된 MCP 서버가 없음`)
                 }
 
+                console.log('🚀 Gemini API 호출 시작...')
                 const response = await ai.models.generateContentStream({
                     model,
-                    contents: prompt,
+                    contents: [
+                        {
+                            role: 'user',
+                            parts: [{ text: prompt }]
+                        }
+                    ],
                     config: tools.length > 0 ? { tools } : undefined
                 })
+                console.log('✅ Gemini API 응답 스트림 시작')
 
                 for await (const chunk of response) {
                     // 함수 호출 처리
@@ -154,8 +161,7 @@ export async function GET(req: Request) {
                                 index: number
                             ) => {
                                 console.log(
-                                    `  ${index + 1}. ${
-                                        call.name || '이름없음'
+                                    `  ${index + 1}. ${call.name || '이름없음'
                                     }(${JSON.stringify(call.args || {})})`
                                 )
                             }
@@ -179,6 +185,7 @@ export async function GET(req: Request) {
                 controller.enqueue(sseEncode({ type: 'done' }))
                 controller.close()
             } catch (err: unknown) {
+                console.error('❌ Gemini API 호출 중 에러 발생:', err)
                 const status =
                     typeof err === 'object' && err && 'status' in err
                         ? (err as { status?: number }).status ?? 500

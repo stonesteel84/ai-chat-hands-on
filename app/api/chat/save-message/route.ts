@@ -22,6 +22,14 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        if (!supabase) {
+            // Supabase가 설정되지 않은 경우 - 저장 건너뛰기
+            return Response.json({
+                success: false,
+                error: 'Supabase가 설정되지 않았습니다. 메시지는 localStorage에만 저장됩니다.'
+            })
+        }
+
         // 메시지 저장
         const { data, error } = await supabase
             .from('messages')

@@ -78,19 +78,30 @@ export async function connectToMCPServer(
                     throw new Error('SSE 전송 방식에는 URL이 필요합니다')
                 }
                 console.log(`📡 SSE 전송 설정: ${config.url}`)
+                console.log(`📋 SSE 헤더:`, config.headers ? Object.keys(config.headers) : '없음')
                 try {
                     new URL(config.url) // URL 유효성 검사
                 } catch {
                     throw new Error(`유효하지 않은 URL: ${config.url}`)
                 }
-                transport = new SSEClientTransport(new URL(config.url))
+                transport = new SSEClientTransport(new URL(config.url), {
+                    requestInit: {
+                        headers: config.headers || {}
+                    }
+                })
                 break
 
             case 'http':
                 if (!config.url) {
                     throw new Error('HTTP 전송 방식에는 URL이 필요합니다')
                 }
+                const headerLog = { ...config.headers };
+                if (headerLog['Authorization']) {
+                    headerLog['Authorization'] = headerLog['Authorization'].substring(0, 15) + '...';
+                }
                 console.log(`🌐 HTTP 전송 설정: ${config.url}`)
+                console.log(`📋 HTTP 헤더 (디버그):`, headerLog)
+
                 try {
                     new URL(config.url) // URL 유효성 검사
                 } catch {
@@ -100,7 +111,11 @@ export async function connectToMCPServer(
                 const baseUrl = new URL(config.url)
 
                 // StreamableHTTP 방식 먼저 시도
-                transport = new StreamableHTTPClientTransport(baseUrl)
+                transport = new StreamableHTTPClientTransport(baseUrl, {
+                    requestInit: {
+                        headers: config.headers || {}
+                    }
+                })
                 console.log('StreamableHTTP 전송 방식으로 연결 시도 중...')
                 break
 
@@ -168,8 +183,12 @@ export async function connectToMCPServer(
                 )
 
                 try {
-                    // SSE transport로 재시도
-                    transport = new SSEClientTransport(new URL(config.url))
+                    // SSE transport로 재시도 (헤더 포함)
+                    transport = new SSEClientTransport(new URL(config.url), {
+                        requestInit: {
+                            headers: config.headers || {}
+                        }
+                    })
                     const connectPromise = client.connect(transport)
                     const timeoutPromise = new Promise((_, reject) => {
                         setTimeout(
@@ -374,8 +393,7 @@ export async function callMCPTool(
         )
         console.error(`오류 내용:`, error)
         throw new Error(
-            `도구 호출 실패: ${
-                error instanceof Error ? error.message : '알 수 없는 오류'
+            `도구 호출 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'
             }`
         )
     }
@@ -413,8 +431,7 @@ export async function getMCPPromptResult(
         }
     } catch (error) {
         throw new Error(
-            `프롬프트 실행 실패: ${
-                error instanceof Error ? error.message : '알 수 없는 오류'
+            `프롬프트 실행 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'
             }`
         )
     }
@@ -442,8 +459,7 @@ export async function readMCPResource(
         }
     } catch (error) {
         throw new Error(
-            `리소스 읽기 실패: ${
-                error instanceof Error ? error.message : '알 수 없는 오류'
+            `리소스 읽기 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'
             }`
         )
     }

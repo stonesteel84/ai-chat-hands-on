@@ -28,7 +28,21 @@ export class MCPClientManager {
         const result: APIResponse<T> = await response.json()
 
         if (!result.success || !response.ok) {
-            throw new Error(result.error || '요청 처리 중 오류가 발생했습니다')
+            let errorMessage = result.error || '요청 처리 중 오류가 발생했습니다'
+            try {
+                // 에러 메시지가 JSON 문자열인 경우 파싱 시도
+                if (errorMessage.startsWith('{') && errorMessage.includes('"error"')) {
+                    const errorObj = JSON.parse(errorMessage)
+                    if (errorObj.error_description) {
+                        errorMessage = errorObj.error_description
+                    } else if (errorObj.error) {
+                        errorMessage = typeof errorObj.error === 'string' ? errorObj.error : JSON.stringify(errorObj.error)
+                    }
+                }
+            } catch {
+                // JSON 파싱 실패 시 원본 메시지 사용
+            }
+            throw new Error(errorMessage)
         }
 
         return result.data as T

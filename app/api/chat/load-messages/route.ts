@@ -16,6 +16,14 @@ export async function GET(request: NextRequest) {
             )
         }
 
+        if (!supabase) {
+            // Supabase가 설정되지 않은 경우 - 빈 배열 반환
+            return Response.json({
+                success: true,
+                messages: []
+            })
+        }
+
         // 메시지 로드
         const { data, error } = await supabase
             .from('messages')

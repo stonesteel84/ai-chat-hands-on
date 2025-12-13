@@ -88,6 +88,10 @@ async function loadMessagesFromSupabase(
         const response = await fetch(
             `/api/chat/load-messages?sessionId=${encodeURIComponent(sessionId)}`
         )
+        if (!response.ok) {
+            // API가 없거나 오류 응답인 경우 빈 배열 반환
+            return []
+        }
         const data = await response.json()
         if (data.success && data.messages) {
             return data.messages
@@ -125,7 +129,7 @@ export default function Home() {
                         onClick={async () => {
                             try {
                                 await navigator.clipboard.writeText(codeText)
-                            } catch {}
+                            } catch { }
                         }}
                         className="absolute top-2 right-2 rounded-md border px-2 py-1 text-xs bg-white/80 dark:bg-black/50 hover:bg-white dark:hover:bg-black text-gray-700 dark:text-gray-200 opacity-0 group-hover:opacity-100 transition"
                     >
@@ -168,7 +172,7 @@ export default function Home() {
     const endRef = useRef<HTMLDivElement | null>(null)
     const hasLoadedRef = useRef(false)
 
-    // Load persisted messages only on client after mount to avoid SSR mismatch
+    // SSR 불일치를 방지하기 위해 마운트 후 클라이언트에서만 저장된 메시지를 로드
     useEffect(() => {
         const loadMessages = async () => {
             try {
@@ -206,20 +210,20 @@ export default function Home() {
                 try {
                     const raw = localStorage.getItem(STORAGE_KEY)
                     if (raw) setMessages(JSON.parse(raw) as ChatMessage[])
-                } catch {}
+                } catch { }
             }
             hasLoadedRef.current = true
         }
         loadMessages()
     }, [])
 
-    // Persist messages after initial load is done
+    // 초기 로드가 완료된 후 메시지 저장
     useEffect(() => {
         if (!hasLoadedRef.current || !sessionId) return
         try {
             // localStorage에 저장
             localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
-        } catch {}
+        } catch { }
     }, [messages, sessionId])
 
     useEffect(() => {
@@ -254,7 +258,7 @@ export default function Home() {
         const userMsg: ChatMessage = { role: 'user', content: prompt }
         const aiMsg: ChatMessage = { role: 'assistant', content: '' }
         setMessages(prev => [...prev, userMsg, aiMsg])
-        
+
         // 사용자 메시지도 Supabase에 저장
         if (sessionId) {
             saveMessageToSupabase(sessionId, userMsg).catch(console.error)
@@ -335,7 +339,7 @@ export default function Home() {
                                                 functionResults: results
                                             }
                                             next[next.length - 1] = updatedMsg
-                                            
+
                                             // Supabase에 업데이트된 메시지 저장
                                             if (sessionId) {
                                                 saveMessageToSupabase(
@@ -343,7 +347,7 @@ export default function Home() {
                                                     updatedMsg
                                                 ).catch(console.error)
                                             }
-                                            
+
                                             return next
                                         })
                                     })
@@ -362,7 +366,7 @@ export default function Home() {
                         } else if (evt.type === 'error') {
                             const errorCode = evt.code || 'UNKNOWN_ERROR'
                             const errorMessage = evt.message || '오류가 발생했습니다'
-                            
+
                             // MCP 서버 연결 오류인 경우 특별 처리
                             if (errorCode === 'MCP_SERVER_NOT_CONNECTED') {
                                 setMessages(prev => {
@@ -380,7 +384,7 @@ export default function Home() {
                                 throw new Error(errorMessage)
                             }
                         }
-                    } catch {}
+                    } catch { }
                 }
             }
         } catch (error) {
@@ -391,10 +395,9 @@ export default function Home() {
                     role: 'assistant',
                     content:
                         (last?.content || '') +
-                        `\n\n[에러] ${
-                            error instanceof Error
-                                ? error.message
-                                : '요청 중 오류가 발생했습니다.'
+                        `\n\n[에러] ${error instanceof Error
+                            ? error.message
+                            : '요청 중 오류가 발생했습니다.'
                         }`
                 }
                 return next
@@ -444,7 +447,7 @@ export default function Home() {
                         </div>
                         {currentTab === 'chat' && (
                             <div className="text-xs text-gray-500">
-                                모델: gemini-2.0-flash-001
+                                모델: gemini-2.5-flash
                             </div>
                         )}
                     </div>

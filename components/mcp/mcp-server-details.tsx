@@ -168,10 +168,10 @@ function ToolCard({
                                             {tool.inputSchema.required?.includes(
                                                 paramName
                                             ) && (
-                                                <span className="text-red-500 ml-1">
-                                                    *
-                                                </span>
-                                            )}
+                                                    <span className="text-red-500 ml-1">
+                                                        *
+                                                    </span>
+                                                )}
                                         </div>
                                         {paramInfo.description && (
                                             <div className="mt-1">
@@ -209,24 +209,22 @@ function ToolCard({
                         placeholder={
                             tool.inputSchema?.properties
                                 ? `{\n${Object.entries(
-                                      tool.inputSchema.properties
-                                  )
-                                      .map(
-                                          ([key, info]) =>
-                                              `  "${key}": "${
-                                                  info.type === 'string'
-                                                      ? 'value'
-                                                      : info.type === 'number'
-                                                      ? '0'
-                                                      : 'value'
-                                              }"`
-                                      )
-                                      .join(',\n')}\n}`
+                                    tool.inputSchema.properties
+                                )
+                                    .map(
+                                        ([key, info]) =>
+                                            `  "${key}": "${info.type === 'string'
+                                                ? 'value'
+                                                : info.type === 'number'
+                                                    ? '0'
+                                                    : 'value'
+                                            }"`
+                                    )
+                                    .join(',\n')}\n}`
                                 : '{"param1": "value1", "param2": "value2"}'
                         }
-                        className={`min-h-[80px] font-mono text-sm ${
-                            jsonError ? 'border-red-500' : ''
-                        }`}
+                        className={`min-h-[80px] font-mono text-sm ${jsonError ? 'border-red-500' : ''
+                            }`}
                     />
                     {jsonError && (
                         <p className="text-xs text-red-500">{jsonError}</p>
@@ -458,7 +456,7 @@ export function MCPServerDetails({
                         <span className="font-medium">전송:</span>{' '}
                         {server.config.transport.toUpperCase()}
                         {server.config.transport === 'http' &&
-                            ' (auto-fallback)'}
+                            ' (자동 대체)'}
                     </div>
                 </div>
                 {(server.config.transport === 'http' ||
