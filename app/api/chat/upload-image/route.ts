@@ -14,6 +14,13 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        if (!supabase) {
+            return Response.json(
+                { success: false, error: '서버에 Supabase가 구성되지 않았습니다.' },
+                { status: 503 }
+            )
+        }
+
         // Base64 데이터에서 실제 데이터 추출
         const base64Data = imageData.includes(',')
             ? imageData.split(',')[1]
