@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(base64Data, 'base64')
 
         // Supabase Storage에 업로드
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabase!.storage
             .from(BUCKET_NAME)
             .upload(fileName, buffer, {
                 contentType: mimeType || 'image/png',
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         // 공개 URL 가져오기
         const {
             data: { publicUrl }
-        } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName)
+        } = supabase!.storage.from(BUCKET_NAME).getPublicUrl(fileName)
 
         return Response.json({
             success: true,
