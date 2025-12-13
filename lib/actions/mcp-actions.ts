@@ -44,12 +44,7 @@ export async function connectToMCPServer(
             },
             {
                 capabilities: {
-                    tools: {},
-                    prompts: {},
-                    resources: {
-                        subscribe: true,
-                        listChanged: true
-                    }
+                    // 클라이언트 capabilities 설정
                 }
             }
         )
